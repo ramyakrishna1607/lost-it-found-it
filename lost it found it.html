@@ -1,0 +1,662 @@
+
+""#python
+from datetime import datetime, timezone
+from uuid import uuid4
+
+from flask import Flask, jsonify, render_template, request
+
+app = Flask(__name__)
+
+# Demo storage: items disappear when the server restarts.
+items = []
+
+
+@app.get("/")
+def home():
+    return render_template("index.html")
+
+
+@app.get("/api/items")
+def get_items():
+    return jsonify(sorted(items, key=lambda item: item["created_at"], reverse=True))
+
+
+@app.post("/api/items")
+def create_item():
+    data = request.get_json(silent=True) or {}
+
+    item_type = data.get("type", "").strip().lower()
+    name = data.get("name", "").strip()
+    location = data.get("location", "").strip()
+    description = data.get("description", "").strip()
+    contact = data.get("contact", "").strip()
+
+    if item_type not in {"lost", "found"}:
+        return jsonify({"error": "Choose whether the item was lost or found."}), 400
+
+    if not name or not location:
+        return jsonify({"error": "Item name and location are required."}), 400
+
+    if len(name) > 100 or len(location) > 120 or len(description) > 500:
+        return jsonify({"error": "One or more fields are too long."}), 400
+
+    item = {
+        "id": str(uuid4()),
+        "type": item_type,
+        "name": name,
+        "location": location,
+        "description": description,
+        "contact": contact[:150],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    items.append(item)
+    return jsonify(item), 201
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
+
+
+### `templates/index.html`
+
+html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f7f5ef">
+  <title>Lost Today, Found Tomorrow</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</head>
+<body>
+  <header class="hero">
+    <nav class="nav">
+      <a class="brand" href="/">Find<span>ly</span></a>
+      <a class="nav-link" href="#report">Post an item</a>
+    </nav>
+
+    <div class="hero-content">
+      <p class="eyebrow">A little hope goes a long way</p>
+      <h1>Lost today.<br><span>Found tomorrow.</span></h1>
+      <p class="intro">
+        Help lost belongings find their way home. Share a report or see
+        what others have found.
+      </p>
+      <a class="button button-primary" href="#report">Report an item</a>
+    </div>
+    <div class="hero-decoration" aria-hidden="true">✳</div>
+  </header>
+
+  <main>
+    <section class="content-section" aria-labelledby="listings-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">The community board</p>
+          <h2 id="listings-title">Recent reports</h2>
+        </div>
+        <label class="search-wrap">
+          <span class="sr-only">Search reports</span>
+          <input id="search" type="search" placeholder="Search items or places">
+        </label>
+      </div>
+
+      <div class="filters" aria-label="Filter reports">
+        <button class="filter active" data-filter="all" type="button">All reports</button>
+        <button class="filter" data-filter="lost" type="button">Lost</button>
+        <button class="filter" data-filter="found" type="button">Found</button>
+      </div>
+
+      <p id="status-message" class="status-message" role="status"></p>
+      <div id="items-list" class="items-grid"></div>
+    </section>
+
+    <section class="report-section" id="report" aria-labelledby="report-title">
+      <div class="report-copy">
+        <p class="eyebrow">Make someone’s day</p>
+        <h2 id="report-title">Post a lost or found item</h2>
+        <p>
+         # The more details you share, the easier it is for an item to find
+          its owner.
+        </p>
+      </div>
+
+      <form id="item-form" class="report-form">
+        <label>
+          Is it lost or found?
+          <select name="type" required>
+            <option value="lost">I lost something</option>
+            <option value="found">I found something</option>
+          </select>
+        </label>
+
+        <label>
+          Item name
+          <input name="name" maxlength="100" placeholder="e.g. Blue backpack" required>
+        </label>
+
+        <label>
+          Where was it lost or found?
+          <input name="location" maxlength="120" placeholder="e.g. City library" required>
+        </label>
+
+        <label>
+          Description
+          <textarea name="description" maxlength="500" rows="3"
+            placeholder="Add helpful details, like color or approximate date"></textarea>
+        </label>
+
+        <label>
+          Contact (optional)
+          <input name="contact" maxlength="150" placeholder="An email address or other contact method">
+        </label>
+
+        <button class="button button-dark" type="submit">Share report</button>
+        <p class="form-note">Only share contact details you’re comfortable making public.</p>
+      </form>
+    </section>
+  </main>
+
+  <footer>
+    <p>Lost Today, Found Tomorrow <span>·</span> A little kindness can bring things home.</p>
+  </footer>
+</body>
+</html>
+```
+
+### `static/style.css`
+
+```css
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap");
+
+:root {
+  --ink: #202b25;
+  --muted: #68736c;
+  --paper: #f7f5ef;
+  --green: #355e48;
+  --green-dark: #294a38;
+  --orange: #e9a16f;
+  --white: #fff;
+  --line: #e7e5dd;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background: var(--white);
+  font-family: "DM Sans", sans-serif;
+}
+
+.hero {
+  position: relative;
+  min-height: 490px;
+  overflow: hidden;
+  padding: 24px max(7vw, 24px) 72px;
+  background: var(--paper);
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.brand {
+  color: var(--ink);
+  font-size: 1.4rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.brand span {
+  color: var(--green);
+}
+
+.nav-link {
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 1;
+  max-width: 1120px;
+  margin: 76px auto 0;
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+  color: var(--green);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+h1,
+h2 {
+  font-family: "Playfair Display", Georgia, serif;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(3rem, 7vw, 5.7rem);
+  line-height: 1.02;
+}
+
+h1 span {
+  color: var(--green);
+}
+
+.intro {
+  max-width: 480px;
+  margin: 22px 0 28px;
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.7;
+}
+
+.hero-decoration {
+  position: absolute;
+  right: 12%;
+  bottom: 20px;
+  color: #e9a16f;
+  font-size: clamp(10rem, 25vw, 22rem);
+  opacity: 0.35;
+  transform: rotate(-15deg);
+}
+
+.button {
+  display: inline-block;
+  border: 0;
+  border-radius: 8px;
+  padding: 13px 20px;
+  font: inherit;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button-primary {
+  color: var(--white);
+  background: var(--green);
+}
+
+.button-primary:hover,
+.button-dark:hover {
+  background: var(--green-dark);
+}
+
+.content-section,
+.report-section {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 72px 24px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+h2 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3rem);
+}
+
+.search-wrap input,
+.report-form input,
+.report-form select,
+.report-form textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 12px;
+  color: var(--ink);
+  background: var(--white);
+  font: inherit;
+}
+
+.search-wrap input {
+  min-width: 250px;
+}
+
+.filters {
+  display: flex;
+  gap: 10px;
+  margin: 28px 0 20px;
+}
+
+.filter {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 8px 16px;
+  color: var(--muted);
+  background: var(--white);
+  font: inherit;
+  cursor: pointer;
+}
+
+.filter.active {
+  border-color: var(--green);
+  color: var(--white);
+  background: var(--green);
+}
+
+.status-message {
+  min-height: 24px;
+  color: var(--muted);
+}
+
+.items-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.item-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px;
+  background: var(--white);
+}
+
+.item-type {
+  display: inline-block;
+  border-radius: 20px;
+  padding: 5px 10px;
+  color: var(--green-dark);
+  background: #eaf1eb;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.item-type.lost {
+  color: #8c4d2a;
+  background: #fff0e5;
+}
+
+.item-card h3 {
+  margin: 14px 0 8px;
+  font-size: 1.15rem;
+}
+
+.item-card p {
+  margin: 7px 0;
+  color: var(--muted);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.item-card .item-location {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.report-section {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  gap: 64px;
+  align-items: start;
+  max-width: none;
+  padding-right: max(7vw, 24px);
+  padding-left: max(7vw, 24px);
+  background: var(--paper);
+}
+
+.report-copy {
+  max-width: 400px;
+}
+
+.report-copy p:last-child {
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.report-form {
+  display: grid;
+  gap: 16px;
+}
+
+.report-form label {
+  display: grid;
+  gap: 7px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.report-form textarea {
+  resize: vertical;
+}
+
+.button-dark {
+  color: var(--white);
+  background: var(--ink);
+}
+
+.form-note {
+  margin: -7px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+footer {
+  padding: 24px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+footer span {
+  padding: 0 5px;
+  color: var(--orange);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+@media (max-width: 700px) {
+  .hero {
+    min-height: 440px;
+  }
+
+  .hero-content {
+    margin-top: 60px;
+  }
+
+  .section-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .search-wrap input {
+    min-width: 0;
+  }
+
+  .report-section {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+}
+```
+
+### `static/app.js`
+
+```javascript
+const itemsList = document.querySelector("#items-list");
+const form = document.querySelector("#item-form");
+const searchInput = document.querySelector("#search");
+const statusMessage = document.querySelector("#status-message");
+const filterButtons = document.querySelectorAll(".filter");
+
+let items = [];
+let currentFilter = "all";
+
+function makeTextElement(tag, className, text) {
+  const element = document.createElement(tag);
+  if (className) element.className = className;
+  element.textContent = text;
+  return element;
+}
+
+function renderItems() {
+  const searchTerm = searchInput.value.trim().toLowerCase();
+
+  const visibleItems = items.filter((item) => {
+    const matchesType = currentFilter === "all" || item.type === currentFilter;
+    const searchableText = [
+      item.name,
+      item.location,
+      item.description,
+    ].join(" ").toLowerCase();
+
+    return matchesType && searchableText.includes(searchTerm);
+  });
+
+  itemsList.replaceChildren();
+
+  if (visibleItems.length === 0) {
+    itemsList.append(
+      makeTextElement("p", "empty-message", "No reports found. Be the first to post one.")
+    );
+    return;
+  }
+
+  for (const item of visibleItems) {
+    const card = document.createElement("article");
+    card.className = "item-card";
+
+    const badge = makeTextElement("span", `item-type ${item.type}`, item.type);
+    const title = makeTextElement("h3", "", item.name);
+    const location = makeTextElement("p", "item-location", `📍 ${item.location}`);
+
+    card.append(badge, title, location);
+
+    if (item.description) {
+      card.append(makeTextElement("p", "", item.description));
+    }
+
+    if (item.contact) {
+      card.append(makeTextElement("p", "", `Contact: ${item.contact}`));
+    }
+
+    itemsList.append(card);
+  }
+}
+
+async function loadItems() {
+  statusMessage.textContent = "Loading reports…";
+
+  try {
+    const response = await fetch("/api/items");
+    if (!response.ok) throw new Error("Could not load reports.");
+
+    items = await response.json();
+    statusMessage.textContent = "";
+    renderItems();
+  } catch (error) {
+    statusMessage.textContent = error.message;
+  }
+}
+
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const formData = new FormData(form);
+  const item = Object.fromEntries(formData.entries());
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  submitButton.disabled = true;
+  statusMessage.textContent = "Sharing your report…";
+
+  try {
+    const response = await fetch("/api/items", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(item),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || "Could not submit your report.");
+    }
+
+    form.reset();
+    currentFilter = "all";
+    filterButtons.forEach((button) => {
+      button.classList.toggle("active", button.dataset.filter === "all");
+    });
+
+    statusMessage.textContent = "Your report has been shared. Thank you!";
+    await loadItems();
+  } catch (error) {
+    statusMessage.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+});
+
+filterButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    currentFilter = button.dataset.filter;
+
+    filterButtons.forEach((filterButton) => {
+      filterButton.classList.toggle("active", filterButton === button);
+    });
+
+    renderItems();
+  });
+});
+
+searchInput.addEventListener("input", renderItems);
+
+loadItems();
+```
+
+### `requirements.txt`
+
+```text
+Flask>=3.0,<4.0
+```
+
+### Run it
+
+From the project directory, install Flask and start the app:
+
+```bash
+python -m venv .venv
+```
+
+Activate the environment, then run:
+
+```bash
+pip install -r requirements.txt
+python app.py
+```
+
+Open **http://127.0.0.1:5000** in your browser. This is a demo version; for a real deployment, replace the in-memory list with a database and avoid publishing sensitive contact information.
